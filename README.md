@@ -1,6 +1,15 @@
+---
+title: Email Agent
+emoji: "📧"
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Email Agent
 
-This project is a minimal email-classification environment and baseline agent. The agent receives a short email-like text observation and predicts one of three labels:
+This project is a minimal email-classification environment and baseline agent. It now includes a lightweight web app for Hugging Face Spaces, while keeping the original environment and runner script intact. The agent receives a short email-like text observation and predicts one of three labels:
 
 - `IMPORTANT`
 - `SPAM`
@@ -13,6 +22,7 @@ The environment then returns a reward based on whether the prediction matches th
 - `env.py`: custom environment with a fixed dataset and `reset` / `step` methods
 - `agent.py`: simple keyword-based baseline policy
 - `inference.py`: runner that executes one full episode and prints structured logs
+- `app.py`: Flask web app for interactive classification and Spaces deployment
 - `requirements.txt`: Python dependencies
 - `Dockerfile`: container setup for running the project
 
@@ -116,6 +126,14 @@ $env:HF_TOKEN="your_token_here"
 python inference.py
 ```
 
+5. Or run the web app locally:
+
+```bash
+python app.py
+```
+
+Then open `http://localhost:7860`.
+
 ### Docker Setup
 
 Build the image:
@@ -129,6 +147,8 @@ Run the container:
 ```bash
 docker run --rm -e HF_TOKEN=your_token_here email-agent
 ```
+
+Then open `http://localhost:7860`.
 
 ## Expected Output
 
@@ -150,4 +170,5 @@ Example log format:
 
 - The current agent is rule-based and does not call the language model.
 - `inference.py` initializes an OpenAI-compatible client pointing to Hugging Face Router, but the baseline flow currently classifies emails through the local `agent()` function.
+- `app.py` is the long-running process intended for Hugging Face Spaces, because Docker Spaces must keep serving HTTP traffic on port `7860`.
 - Because the environment data is fixed and ordered, this project is best understood as a simple evaluation/demo setup rather than a full RL benchmark.
