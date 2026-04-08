@@ -17,7 +17,7 @@ MODEL_NAME = (
     os.getenv("MODEL_NAME")
     or os.getenv("MODEL")
     or os.getenv("OPENAI_MODEL")
-    or "gpt-4o-mini"
+    or ""
 )
 
 client = OpenAI(
@@ -35,6 +35,17 @@ def log_step(step, action, reward, done):
 def log_end(success, steps, rewards):
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}")
+
+
+def resolve_model_name():
+    if MODEL_NAME:
+        return MODEL_NAME
+
+    models = client.models.list()
+    model_ids = [model.id for model in models.data if getattr(model, "id", None)]
+    if not model_ids:
+        raise RuntimeError("No models returned by the injected LLM proxy.")
+    return model_ids[0]
 
 
 def classify_email(email):
@@ -71,6 +82,9 @@ def main():
         raise RuntimeError(
             "Missing API_BASE_URL or API_KEY. This script must use the injected LLM proxy credentials."
         )
+
+    global MODEL_NAME
+    MODEL_NAME = resolve_model_name()
 
     env = EmailEnv()
 
