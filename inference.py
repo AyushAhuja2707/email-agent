@@ -3,9 +3,22 @@ from openai import OpenAI
 from env import EmailEnv
 
 
-API_BASE_URL = os.getenv("API_BASE_URL")
+RAW_API_BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+
+if RAW_API_BASE_URL:
+    API_BASE_URL = RAW_API_BASE_URL.rstrip("/")
+    if not API_BASE_URL.endswith("/v1"):
+        API_BASE_URL = f"{API_BASE_URL}/v1"
+else:
+    API_BASE_URL = None
+
+MODEL_NAME = (
+    os.getenv("MODEL_NAME")
+    or os.getenv("MODEL")
+    or os.getenv("OPENAI_MODEL")
+    or "gpt-4o-mini"
+)
 
 client = OpenAI(
     base_url=API_BASE_URL,
