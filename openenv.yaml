@@ -1,0 +1,66 @@
+name: email-agent
+version: 1.0.0
+description: >
+  A minimal OpenEnv-compatible email classification environment.
+  The agent observes one email at a time and must choose one of
+  three labels: IMPORTANT, SPAM, or WORK.
+
+author: Ayush Ahuja
+tags:
+  - openenv
+  - email
+  - classification
+  - hackathon
+
+tasks:
+  - id: email-classification-easy
+    difficulty: easy
+    description: Classify the fixed inbox of eight emails.
+    reset_params:
+      difficulty: easy
+
+action_space:
+  type: object
+  properties:
+    action:
+      type: string
+      enum: [IMPORTANT, SPAM, WORK]
+      description: Predicted label for the current email
+  required:
+    - action
+
+observation_space:
+  type: object
+  properties:
+    email:
+      type: string
+    valid_actions:
+      type: array
+      items:
+        type: string
+    step_count:
+      type: integer
+    remaining_emails:
+      type: integer
+    done:
+      type: boolean
+    task_description:
+      type: string
+  required:
+    - email
+    - valid_actions
+    - step_count
+    - remaining_emails
+    - done
+    - task_description
+
+reward:
+  min: -1.0
+  max: 1.0
+  description: +1 for a correct classification and -1 for an incorrect classification.
+
+endpoints:
+  health: GET /health
+  reset: POST /reset
+  step: POST /step
+  state: GET /state

@@ -1,0 +1,14 @@
+[project]
+name = "email-agent"
+version = "0.1.0"
+description = "A minimal OpenEnv-compatible email classification environment."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flask",
+    "openai",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

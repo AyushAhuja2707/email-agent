@@ -1,7 +1,8 @@
 import html
 import os
+import uuid
 
-from flask import Flask, request
+from flask import Flask, jsonify, request
 
 from agent import agent
 from env import EmailEnv
@@ -9,8 +10,65 @@ from env import EmailEnv
 
 app = Flask(__name__)
 
+VALID_ACTIONS = ["IMPORTANT", "SPAM", "WORK"]
 
-def run_episode():
+CURRENT_RUN = {
+    "env": None,
+    "episode_id": None,
+    "step_count": 0,
+    "total_reward": 0.0,
+    "done": False,
+    "current_email": None,
+}
+
+
+def build_observation(email_text):
+    env = CURRENT_RUN["env"]
+    remaining = 0
+    if env is not None:
+        remaining = max(len(env.data) - env.index, 0)
+
+    return {
+        "email": email_text,
+        "valid_actions": VALID_ACTIONS,
+        "step_count": CURRENT_RUN["step_count"],
+        "remaining_emails": remaining,
+        "done": CURRENT_RUN["done"],
+        "task_description": "Classify the current email as IMPORTANT, SPAM, or WORK.",
+    }
+
+
+def start_new_episode():
+    env = EmailEnv()
+    first_email = env.reset()
+
+    CURRENT_RUN["env"] = env
+    CURRENT_RUN["episode_id"] = str(uuid.uuid4())
+    CURRENT_RUN["step_count"] = 0
+    CURRENT_RUN["total_reward"] = 0.0
+    CURRENT_RUN["done"] = False
+    CURRENT_RUN["current_email"] = first_email
+
+    return first_email
+
+
+def extract_action(payload):
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("action", "label", "prediction", "category"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value.strip().upper()
+
+    action_type = payload.get("action_type")
+    if isinstance(action_type, str) and action_type.strip().upper() in VALID_ACTIONS:
+        return action_type.strip().upper()
+
+    return None
+
+
+def run_episode_preview():
     env = EmailEnv()
     rewards = []
     logs = []
@@ -37,6 +95,116 @@ def run_episode():
     return "\n".join(logs)
 
 
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
+@app.post("/reset")
+def reset():
+    first_email = start_new_episode()
+    return jsonify(
+        {
+            "observation": build_observation(first_email),
+            "reward": 0.0,
+            "done": False,
+            "info": {
+                "episode_id": CURRENT_RUN["episode_id"],
+                "message": "Environment reset successfully.",
+            },
+        }
+    )
+
+
+@app.post("/step")
+def step():
+    if CURRENT_RUN["env"] is None or CURRENT_RUN["done"]:
+        first_email = start_new_episode()
+        return jsonify(
+            {
+                "observation": build_observation(first_email),
+                "reward": 0.0,
+                "done": False,
+                "info": {
+                    "episode_id": CURRENT_RUN["episode_id"],
+                    "message": "A new episode was started because no active episode was available.",
+                },
+            }
+        )
+
+    payload = request.get_json(silent=True) or {}
+    action = extract_action(payload)
+
+    if action not in VALID_ACTIONS:
+        return (
+            jsonify(
+                {
+                    "error": "Invalid action. Use one of IMPORTANT, SPAM, or WORK.",
+                    "valid_actions": VALID_ACTIONS,
+                }
+            ),
+            400,
+        )
+
+    next_email, reward, done, _ = CURRENT_RUN["env"].step(action)
+    CURRENT_RUN["step_count"] += 1
+    CURRENT_RUN["total_reward"] += reward
+    CURRENT_RUN["done"] = done
+    CURRENT_RUN["current_email"] = next_email
+
+    return jsonify(
+        {
+            "observation": build_observation(next_email),
+            "reward": float(reward),
+            "done": done,
+            "info": {
+                "episode_id": CURRENT_RUN["episode_id"],
+                "message": "Step executed successfully.",
+            },
+        }
+    )
+
+
+@app.get("/state")
+def state():
+    if CURRENT_RUN["env"] is None:
+        return jsonify(
+            {
+                "episode_id": None,
+                "step_count": 0,
+                "total_reward": 0.0,
+                "done": False,
+                "current_email": None,
+            }
+        )
+
+    return jsonify(
+        {
+            "episode_id": CURRENT_RUN["episode_id"],
+            "step_count": CURRENT_RUN["step_count"],
+            "total_reward": CURRENT_RUN["total_reward"],
+            "done": CURRENT_RUN["done"],
+            "current_email": CURRENT_RUN["current_email"],
+        }
+    )
+
+
+@app.get("/tasks")
+def tasks():
+    return jsonify(
+        {
+            "tasks": [
+                {
+                    "id": "email-classification-easy",
+                    "difficulty": "easy",
+                    "description": "Classify the fixed inbox of eight emails using the three labels.",
+                    "max_steps": 8,
+                }
+            ]
+        }
+    )
+
+
 @app.route("/", methods=["GET", "POST"])
 def home():
     email_text = ""
@@ -46,7 +214,7 @@ def home():
         email_text = request.form.get("email", "")
         prediction = agent(email_text)
 
-    episode_logs = run_episode()
+    episode_logs = run_episode_preview()
 
     prediction_html = ""
     if prediction is not None:
@@ -150,6 +318,7 @@ def home():
     <div class="card">
       <h1>Email Agent</h1>
       <p>Classify an email into <code>IMPORTANT</code>, <code>SPAM</code>, or <code>WORK</code> using the current rule-based agent.</p>
+      <p>OpenEnv endpoints: <code>POST /reset</code>, <code>POST /step</code>, <code>GET /state</code>, <code>GET /health</code>.</p>
       <form method="post">
         <textarea name="email" placeholder="Paste an email here...">{html.escape(email_text)}</textarea>
         <br>
