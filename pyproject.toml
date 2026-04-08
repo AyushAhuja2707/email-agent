@@ -7,7 +7,11 @@ requires-python = ">=3.10"
 dependencies = [
     "flask",
     "openai",
+    "openenv-core>=0.2.0",
 ]
+
+[project.scripts]
+server = "server.app:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
