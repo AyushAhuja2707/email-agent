@@ -13,11 +13,26 @@ tags:
   - hackathon
 
 tasks:
-  - id: email-classification-easy
+  - id: task_easy_001
     difficulty: easy
-    description: Classify the fixed inbox of eight emails.
+    description: Classify 3 emails from a small inbox.
+    grader: smoothed_accuracy
     reset_params:
-      difficulty: easy
+      task_id: task_easy_001
+
+  - id: task_medium_001
+    difficulty: medium
+    description: Classify 5 emails from a medium inbox.
+    grader: smoothed_accuracy
+    reset_params:
+      task_id: task_medium_001
+
+  - id: task_hard_001
+    difficulty: hard
+    description: Classify all 8 emails from the full inbox.
+    grader: smoothed_accuracy
+    reset_params:
+      task_id: task_hard_001
 
 action_space:
   type: object

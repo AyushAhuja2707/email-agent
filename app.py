@@ -15,11 +15,36 @@ VALID_ACTIONS = ["IMPORTANT", "SPAM", "WORK"]
 CURRENT_RUN = {
     "env": None,
     "episode_id": None,
+    "task_id": None,
     "step_count": 0,
     "total_reward": 0.0,
     "done": False,
     "current_email": None,
 }
+
+TASKS = [
+    {
+        "id": "task_easy_001",
+        "difficulty": "easy",
+        "description": "Classify 3 emails from a small inbox.",
+        "max_steps": 3,
+        "grader": "smoothed_accuracy",
+    },
+    {
+        "id": "task_medium_001",
+        "difficulty": "medium",
+        "description": "Classify 5 emails from a medium inbox.",
+        "max_steps": 5,
+        "grader": "smoothed_accuracy",
+    },
+    {
+        "id": "task_hard_001",
+        "difficulty": "hard",
+        "description": "Classify all 8 emails from the full inbox.",
+        "max_steps": 8,
+        "grader": "smoothed_accuracy",
+    },
+]
 
 
 def build_observation(email_text):
@@ -31,6 +56,7 @@ def build_observation(email_text):
     return {
         "email": email_text,
         "valid_actions": VALID_ACTIONS,
+        "task_id": CURRENT_RUN["task_id"],
         "step_count": CURRENT_RUN["step_count"],
         "remaining_emails": remaining,
         "done": CURRENT_RUN["done"],
@@ -38,12 +64,13 @@ def build_observation(email_text):
     }
 
 
-def start_new_episode():
-    env = EmailEnv()
+def start_new_episode(task_id):
+    env = EmailEnv(task_id=task_id)
     first_email = env.reset()
 
     CURRENT_RUN["env"] = env
     CURRENT_RUN["episode_id"] = str(uuid.uuid4())
+    CURRENT_RUN["task_id"] = env.task_id
     CURRENT_RUN["step_count"] = 0
     CURRENT_RUN["total_reward"] = 0.0
     CURRENT_RUN["done"] = False
@@ -102,7 +129,8 @@ def health():
 
 @app.post("/reset")
 def reset():
-    first_email = start_new_episode()
+    requested_task_id = request.args.get("task_id", "task_easy_001")
+    first_email = start_new_episode(requested_task_id)
     return jsonify(
         {
             "observation": build_observation(first_email),
@@ -119,7 +147,7 @@ def reset():
 @app.post("/step")
 def step():
     if CURRENT_RUN["env"] is None or CURRENT_RUN["done"]:
-        first_email = start_new_episode()
+        first_email = start_new_episode("task_easy_001")
         return jsonify(
             {
                 "observation": build_observation(first_email),
@@ -191,18 +219,7 @@ def state():
 
 @app.get("/tasks")
 def tasks():
-    return jsonify(
-        {
-            "tasks": [
-                {
-                    "id": "email-classification-easy",
-                    "difficulty": "easy",
-                    "description": "Classify the fixed inbox of eight emails using the three labels.",
-                    "max_steps": 8,
-                }
-            ]
-        }
-    )
+    return jsonify({"tasks": TASKS})
 
 
 @app.route("/", methods=["GET", "POST"])

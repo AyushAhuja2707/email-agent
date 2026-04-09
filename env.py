@@ -1,7 +1,7 @@
 class EmailEnv:
 
-    def __init__(self):
-        self.data = [
+    def __init__(self, task_id="task_easy_001"):
+        all_data = [
             ("Your OTP is ", "IMPORTANT"),
             ("Win money now!!!", "SPAM"),
             ("Meeting at 10 AM", "WORK"),
@@ -11,6 +11,15 @@ class EmailEnv:
             ("Reset your password now", "IMPORTANT"),
             ("Click here for free gift", "SPAM"),
         ]
+
+        task_slices = {
+            "task_easy_001": 3,
+            "task_medium_001": 5,
+            "task_hard_001": 8,
+        }
+
+        self.task_id = task_id if task_id in task_slices else "task_easy_001"
+        self.data = all_data[: task_slices[self.task_id]]
         self.index = 0
 
     def reset(self):

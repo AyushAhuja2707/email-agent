@@ -1,10 +1,11 @@
 import os
 from openai import OpenAI
-from env import EmailEnv
+import requests
 
 
 RAW_API_BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
+ENV_URL = os.getenv("ENV_URL", "http://127.0.0.1:7860")
 
 if RAW_API_BASE_URL:
     API_BASE_URL = RAW_API_BASE_URL.rstrip("/")
@@ -27,15 +28,15 @@ client = OpenAI(
 )
 
 
-def log_start():
-    print(f"[START] task=email-classification env=custom model={MODEL_NAME}")
+def log_start(task_id):
+    print(f"[START] task={task_id} env=custom model={MODEL_NAME}")
 
 def log_step(step, action, reward, done):
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error=null")
 
-def log_end(success, steps, rewards):
+def log_end(success, steps, score, rewards):
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}")
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}")
 
 
 def rank_model_name(model_name):
@@ -134,6 +135,51 @@ def classify_email(email):
     raise RuntimeError(f"Unable to classify email with any proxy model: {last_error}")
 
 
+def env_post(path, json_body=None, params=None):
+    response = requests.post(
+        f"{ENV_URL}{path}",
+        json=json_body or {},
+        params=params or {},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def smoothed_score(rewards):
+    correct = sum(1 for reward in rewards if reward > 0)
+    total = len(rewards)
+    return (correct + 0.5) / (total + 1.0)
+
+
+def run_task(task_id):
+    rewards = []
+    step = 0
+
+    log_start(task_id)
+
+    reset_payload = env_post("/reset", params={"task_id": task_id})
+    observation = reset_payload["observation"]
+    email = observation["email"]
+    done = False
+
+    while not done:
+        step += 1
+        action = classify_email(email)
+        step_payload = env_post("/step", json_body={"action": action})
+        reward = float(step_payload["reward"])
+        done = bool(step_payload["done"])
+        rewards.append(reward)
+        log_step(step, action, reward, done)
+
+        next_observation = step_payload.get("observation") or {}
+        email = next_observation.get("email")
+
+    score = smoothed_score(rewards)
+    success = 0.0 < score < 1.0
+    log_end(success, step, score, rewards)
+
+
 def main():
     if not API_BASE_URL or not API_KEY:
         raise RuntimeError(
@@ -143,30 +189,8 @@ def main():
     global MODEL_NAME
     MODEL_NAME = resolve_model_name()
 
-    env = EmailEnv()
-
-    rewards = []
-    step = 0
-
-    log_start()
-
-    email = env.reset()
-    done = False
-
-    while not done:
-        step += 1
-
-        action = classify_email(email)
-
-        email, reward, done, _ = env.step(action)
-
-        rewards.append(reward)
-
-        log_step(step, action, reward, done)
-
-    success = sum(rewards) > 0
-
-    log_end(success, step, rewards)
+    for task_id in ["task_easy_001", "task_medium_001", "task_hard_001"]:
+        run_task(task_id)
 
 
 if __name__ == "__main__":
